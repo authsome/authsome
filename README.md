@@ -159,6 +159,7 @@ Request:
 Response:
 
 ```json
+{
     "address": "bc1qu8de7xwv9yq6tw7wgfa8c04pe9gfk6mk6pq63f",
     "amount": 12345,
     "inputs": [
