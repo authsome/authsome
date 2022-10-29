@@ -1,0 +1,40 @@
+{ 
+    "chain_name": "local_testnet",
+    "block_production": "Instant",
+    "parent_network": {
+      "type": "LocalTest"
+    },
+    "initial_state": {
+      "coins": [
+        {
+            "owner": "0xd58573593432a30a800f97ad32f877425c223a9e427ab557aab5d5bb89156db0",
+            "amount": "0x000000000000FFFF",
+            "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+            "owner": "0x14df7c7e4e662db31fe2763b1734a3d680e7b743516319a49baaa22b2032a857",
+            "amount": "0x000000000000FFFF",
+            "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+            "owner": "0x3ff494fb136978c3125844625dad6baf6e87cdb1328c8a51f35bda5afe72425c",
+            "amount": "0x000000000000FFFF",
+            "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    "transaction_parameters": {
+      "contract_max_size": 16777216,
+      "max_inputs": 255,
+      "max_outputs": 255,
+      "max_witnesses": 255,
+      "max_gas_per_tx": 100000000,
+      "max_script_length": 1048576,
+      "max_script_data_length": 1048576,
+      "max_static_contracts": 255,
+      "max_storage_slots": 255,
+      "max_predicate_length": 1048576,
+      "max_predicate_data_length": 1048576,
+      "gas_price_factor": 1000000
+    }
+  }
