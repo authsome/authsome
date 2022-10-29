@@ -1,36 +1,39 @@
+import { Provider, TestUtils } from 'fuels';
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 
 export default function WalletView() {
     const [loginError, setLoginError] = useState('');
+    const [state, setState] = useState({ address: '', privateKey: '', publicKey: '' });
     const {
         register,
         handleSubmit,
-        watch,
         // formState: { errors },
     } = useForm();
-
-    // Reset register errors
-    const watchEmail = watch('email');
-    useEffect(() => {
-        if (loginError) {
-            setLoginError('');
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [watchEmail]);
 
     // Submit logic here
     const onSubmit = (data: any) => {
         console.log('data', data);
-        if (!data.email.includes('@')) {
-            setLoginError('Please enter a valid email.');
-            return;
-        }
-        if (data.email === '') {
-            setLoginError('Please enter a valid email.');
-            return;
-        }
     };
+
+    const copyAddress = (address: string) => {
+        navigator.clipboard.writeText(address);
+    };
+
+    useEffect(() => {
+        const provider = new Provider('127.0.0.1:4000');
+        const getTestWallet = async () => {
+            const testWallet = await TestUtils.generateTestWallet(provider);
+            const { address, privateKey, publicKey } = testWallet;
+            const hexAddress = address.toHexString();
+
+            setState({ address: hexAddress, privateKey, publicKey });
+        };
+        getTestWallet();
+    }, []);
+
+    // save a two test wallets to state
+    //
     return (
         <>
             <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
@@ -50,8 +53,13 @@ export default function WalletView() {
                                 d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3"
                             />
                         </svg>
-                        <h3 className="text-lg font-medium leading-6  text-gray-500">
-                            0x000...
+                        <h3
+                            className="text-lg font-medium leading-6 text-gray-500 cursor-pointer hover:opacity-80"
+                            onClick={() => copyAddress(state.address)}
+                        >
+                            {state.address.substring(0, 5) +
+                                '...' +
+                                state.address.slice(-4)}
                         </h3>
                     </div>
                     <ul>
