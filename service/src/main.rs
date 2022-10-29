@@ -9,7 +9,19 @@ API spec:
 TBD
  */
 
-use poem::{error::NotFoundError, get, handler, listener::TcpListener, Result, Route, Server};
+use poem::{
+    error::NotFoundError, get, handler, listener::TcpListener, post, web::Json, Result, Route,
+    Server,
+};
+use serde::Deserialize;
+use serde_json;
+
+#[derive(Debug, Deserialize)]
+struct PublicKeys {
+    pk1: String,
+    pk2: String,
+    pk3: String,
+}
 
 #[handler]
 fn index() -> String {
@@ -21,7 +33,7 @@ Generation of multi-sig wallet.
 Receive three public keys to generate one multi-sig wallet address.
 */
 #[handler]
-fn generate_wallet(req: Json<Request>) -> Json<Response> {
+fn generate_wallet() -> String {
     "gen wallet TODO!".to_string()
 }
 
@@ -42,6 +54,14 @@ For signature verification:
 #[handler]
 fn spend_fund() -> String {
     "spend fund TODO!".to_string()
+}
+
+#[handler]
+fn hello(req: Json<PublicKeys>) -> Json<serde_json::Value> {
+    Json(serde_json::json! ({
+        "code": 0,
+        "message": req.pk1,
+    }))
 }
 
 #[handler]
