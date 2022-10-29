@@ -42,7 +42,7 @@ function App() {
                             viewBox="0 0 24 24"
                             strokeWidth="1.5"
                             stroke="currentColor"
-                            className="w-12 h-12 text-emerald-600 mx-auto"
+                            className="w-12 h-12 text-emerald-400 mx-auto"
                         >
                             <path
                                 strokeLinecap="round"
@@ -75,7 +75,7 @@ function App() {
                             viewBox="0 0 24 24"
                             strokeWidth="1.5"
                             stroke="currentColor"
-                            className="w-12 h-12 text-emerald-600 mx-auto"
+                            className="w-12 h-12 text-emerald-400 mx-auto"
                         >
                             <path
                                 strokeLinecap="round"
@@ -88,7 +88,7 @@ function App() {
                             Wallet
                         </h2>
                         <p className="text-center text-lg text-emerald-700">
-                            (Logged in screen?)
+                            See and send assets.
                         </p>
                     </div>
                     <WalletView />
