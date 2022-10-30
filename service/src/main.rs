@@ -3,27 +3,31 @@ Assumes
 - `forc` is installed and in path
 - internet connection ...
 */
+#[macro_use]
+extern crate lazy_static;
 
+use std::collections::BTreeMap;
+use std::fs;
 use std::io::Error;
 use std::io::ErrorKind;
+use std::process::Command;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
 use sha2::{Digest, Sha256};
 
-use poem::error::{BadGateway, InternalServerError};
 
-use fuels_contract::predicate::Predicate;
-use handlebars::Handlebars;
+use poem::error::{BadGateway, InternalServerError};
 use poem::{handler, listener::TcpListener, post, web::Json, Result, Route, Server};
+
+use handlebars::Handlebars;
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::BTreeMap;
-use std::fs;
-use std::process::Command;
 
 use fuel_gql_client::fuel_tx::Address;
 use fuel_gql_client::fuel_tx::AssetId;
 use fuel_gql_client::fuel_tx::ContractId;
-use fuel_gql_client::fuel_tx::UtxoId;
+use fuels_contract::predicate::Predicate;
 use fuels_core::parameters::TxParameters;
 use fuels_core::tx::Receipt;
 use fuels_signers::fuel_crypto::PublicKey;
@@ -32,6 +36,7 @@ use fuels_signers::provider::Provider;
 use fuels_signers::Payload;
 use fuels_signers::WalletUnlocked;
 use fuels_types::bech32::Bech32Address;
+use fuels_core::tx::UtxoId;
 
 const N_PUBLIC_KEYS: usize = 3;
 
@@ -117,6 +122,13 @@ fn main() -> bool {
 }
 ";
 
+lazy_static! {
+    static ref BYTE_CODE_LOOKUP: Mutex<HashMap<String, Vec<u8>>> =  {
+        let lookup = HashMap::new();
+        Mutex::new(lookup)
+    };
+}
+
 #[derive(Deserialize)]
 struct GenerateWalletRequest {
     public_keys: [PublicKey; 3],
@@ -165,10 +177,7 @@ fn generate_wallet(req: Json<GenerateWalletRequest>) -> Json<GenerateWalletRespo
         data.insert(format!("public_key_{}", i + 1), public_key.to_string());
     }
     let rendered_template = handlebars.render("t1", &data).unwrap();
-    dbg!(rendered_template);
-
     let h = hash_publickeys(req.public_keys);
-    dbg!(h);
 
     /*
     every time we generate a wallet, we create new folder named with hash of aggregated public keys
@@ -184,8 +193,8 @@ fn generate_wallet(req: Json<GenerateWalletRequest>) -> Json<GenerateWalletRespo
         rendered_template,
     );
 
-    let bytecode_file_path = format!("/tmp/predicates_bytecode_output/{}/predicate.bin", h);
-    let output = execute_command(
+    let bytecode_file_path = format!("{}{}/predicate.bin", PREDICATE_OUTPUT_DIR, h);
+    let _output = execute_command(
         format!(
             "forc build --path {}{} --output {}",
             PREDICATE_DIR_PATH, h, bytecode_file_path,
@@ -193,13 +202,16 @@ fn generate_wallet(req: Json<GenerateWalletRequest>) -> Json<GenerateWalletRespo
         .as_str(),
     );
 
-    let p = Predicate::load_from(&bytecode_file_path);
-    match p {
-        Ok(p) => {
-            let wallet = p.address();
+    let predicate = Predicate::load_from(&bytecode_file_path);
+    match predicate {
+        Ok(predicate) => {
+            let wallet = predicate.address();
+            let code = predicate.code().clone();
+            let mut lookup = BYTE_CODE_LOOKUP.lock().unwrap();
+            lookup.insert(wallet.to_string(), code);
             Json(GenerateWalletResponse {
                 public_keys: req.public_keys,
-                wallet,
+                wallet: wallet.into(),
             })
         }
         Err(e) => {
@@ -263,9 +275,6 @@ async fn spend_funds(req: Json<SpendFundsRequest>) -> Result<Json<SpendFundsResp
     let wallet = Bech32Address::from(req.wallet);
     let recipient = Bech32Address::from(req.recipient);
 
-    // TODO: retrieve code for this wallet address, probably from a mapping that has wallet address as key
-    let code = Vec::<u8>::new();
-
     // convert the inputs we want to spend into payloads with concatenated signatures
     let payloads = req
         .inputs
@@ -275,6 +284,17 @@ async fn spend_funds(req: Json<SpendFundsRequest>) -> Result<Json<SpendFundsResp
             data: input.signatures.concat(),
         })
         .collect();
+
+    let code = {
+        let lookup = BYTE_CODE_LOOKUP.lock().unwrap();
+        match lookup.get(&wallet.to_string()) {
+            Some(code) => code.clone(),
+            None => return Err(InternalServerError(Error::new(
+                ErrorKind::Unsupported,
+                "could not find byte code",
+            ))),
+        }
+    };
 
     let receipts = match unlocked
         .multi_spend_predicate(
