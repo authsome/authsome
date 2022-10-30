@@ -5,7 +5,7 @@ use std::constants::ZERO_B256;
 use std::ecr::ec_recover_address;
 use std::inputs::input_predicate_data;
 
-fn compose(w0: u64, w1: u64, w2: u64, w3: u64) -> b256 {
+/*fn compose(w0: u64, w1: u64, w2: u64, w3: u64) -> b256 {
     let res: b256 = 0x0000000000000000000000000000000000000000000000000000000000000000;
     asm(w0: w0, w1: w1, w2: w2, w3: w3, res: res) {
         sw res w0 i0;
@@ -87,15 +87,25 @@ fn extract_public_key_and_match(signature: B512, expected_public_key: b256) -> u
         }
     }
     return 0;       
+}*/
+
+fn extract_public_key_and_match(signature: B512, expected_public_key: b256) -> u64 {
+    if let Result::Ok(pub_key_sig) = ec_recover_address(signature, ZERO_B256)
+    {
+        if pub_key_sig.value == expected_public_key {
+            return 1;
+        }
+    }
+    0       
 }
 
 fn main() -> bool {
     let signatures: [B512; 3] = input_predicate_data(0);
 
     let public_keys = [
-       0xec54e0a8f1c0d9d530fd2e8d673c86904c052901de5331637feb825efba56e3f,
-       0xec54e0a8f1c0d9d530fd2e8d673c86904c052901de5331637feb825efba56e3f,
-       0xec54e0a8f1c0d9d530fd2e8d673c86904c052901de5331637feb825efba56e3f,
+        0xd58573593432a30a800f97ad32f877425c223a9e427ab557aab5d5bb89156db0,
+        0x14df7c7e4e662db31fe2763b1734a3d680e7b743516319a49baaa22b2032a857,
+        0x3ff494fb136978c3125844625dad6baf6e87cdb1328c8a51f35bda5afe72425c,
     ];
 
     let mut matched_keys = 0;
