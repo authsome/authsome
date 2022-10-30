@@ -39,6 +39,9 @@ use fuels_types::bech32::Bech32Address;
 
 const N_PUBLIC_KEYS: usize = 3;
 
+const WALLET_DERIVATION: &str = "m/0'/0";
+const WALLET_MNEMONIC: &str = "chronic foster dance model together verify cannon foot analyst avocado thank air virtual upper grit gate whisper express food excite disease proof idle brown";
+
 const NODE_URL: &str = "node-beta-1.fuel.network";
 
 const FORCBUILD_DIR: &str = "/tmp/forcbuild/";
@@ -325,7 +328,10 @@ async fn spend_funds(req: Json<SpendFundsRequest>) -> Result<Json<SpendFundsResp
         Ok(provider) => provider,
         Err(err) => return Err(BadGateway(err)),
     };
-    let secret = unsafe { SecretKey::from_bytes_unchecked([0; 32]) };
+    let secret = match SecretKey::new_from_mnemonic_phrase_with_path(WALLET_DERIVATION, WALLET_MNEMONIC) {
+        Ok(secret) => secret,
+        Err(err) => return Err(InternalServerError(err),)
+    };
     let unlocked = WalletUnlocked::new_from_private_key(secret, Some(provider));
 
     // convert address strings to Bech32 addresses (which can't be deserialized directly)
