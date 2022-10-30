@@ -137,12 +137,7 @@ fn get_word_at_address_offset_3(addr: u64) -> u64 {
     }
 }
 
-fn extract_public_key_and_match(signature: B512, expected_public_key: b256) -> u64 {
-
-    let txin = get_input_index();
-    let txout = get_output_index(txin);
-    let txid = get_output_txid(txin);
-    let msg_hash = sha256(txid); // we just work with one output for now
+fn extract_public_key_and_match(msg_hash: b256, signature: B512, expected_public_key: b256) -> u64 {
 
     if let Result::Ok(pub_key_sig) = ec_recover_address(signature, msg_hash)
     {
@@ -162,11 +157,16 @@ fn main() -> bool {
         {{public_key_3}},
     ];
 
+    let txin = get_input_index();
+    let txout = get_output_index(txin);
+    let txid = get_output_txid(txin);
+    let msg_hash = sha256(txid); // we just work with one output for now
+
     let mut matched_keys = 0;
 
-    matched_keys = extract_public_key_and_match(signatures[0], public_keys[0]);
-    matched_keys = matched_keys + extract_public_key_and_match(signatures[1], public_keys[1]);
-    matched_keys = matched_keys + extract_public_key_and_match(signatures[2], public_keys[2]);
+    matched_keys = extract_public_key_and_match(msg_hash, signatures[0], public_keys[0]);
+    matched_keys = matched_keys + extract_public_key_and_match(msg_hash, signatures[1], public_keys[1]);
+    matched_keys = matched_keys + extract_public_key_and_match(msg_hash, signatures[2], public_keys[2]);
 
     return matched_keys > 1;
 }
