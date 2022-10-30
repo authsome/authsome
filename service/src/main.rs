@@ -10,11 +10,22 @@ TBD
  */
 
 use poem::{
-    error::NotFoundError, get, handler, listener::TcpListener, post, web::Json, Result, Route,
+    error::NotFoundError, handler, listener::TcpListener, post, web::Json, Result, Route,
     Server,
 };
+use serde::Serialize;
 use serde::Deserialize;
-use serde_json;
+
+use fuel_gql_client::fuel_tx::Address;
+use fuel_gql_client::fuel_tx::AssetId;
+use fuel_gql_client::fuel_tx::TxId;
+use fuel_gql_client::fuel_tx::UtxoId;
+use fuels_signers::WalletUnlocked;
+use fuels_signers::Payload;
+use fuels_signers::provider::Provider;
+use fuels_signers::fuel_crypto::SecretKey;
+use fuels_core::parameters::TxParameters;
+use fuels_types::bech32::Bech32Address;
 
 #[derive(Debug, Deserialize)]
 struct PublicKeys {
@@ -23,10 +34,7 @@ struct PublicKeys {
     pk3: String,
 }
 
-#[handler]
-fn index() -> String {
-    "Authsome!".to_string()
-}
+const NODE_URL: &str = "node-beta-1.fuel.network";
 
 /*
 Generation of multi-sig wallet.
@@ -51,17 +59,81 @@ For signature verification:
 - msg_hash = sha256(txid + output_index)
 - signature = sign(private_key, msg_hash)
 */
-#[handler]
-fn spend_fund() -> String {
-    "spend fund TODO!".to_string()
+
+#[derive(Deserialize)]
+struct SpendFundsRequest {
+    wallet: Address,
+    asset_id: AssetId,
+    amount: u64,
+    recipient: Address,
+    inputs: Vec<InputWithSig>,
 }
 
+#[derive(Deserialize)]
+struct InputWithSig {
+    utxo_id: UtxoId,
+    signatures: Vec<Vec<u8>>,
+}
+
+#[derive(Serialize)]
+struct SpendFundsResponse {
+    wallet: Address,
+    asset_id: AssetId,
+    amount: u64,
+    recipient: Address,
+    inputs: Vec<InputNoSig>,
+    utxo_id: UtxoId,
+}
+
+#[derive(Serialize)]
+struct InputNoSig {
+    utxo_id: UtxoId,
+}
+
+
 #[handler]
-fn hello(req: Json<PublicKeys>) -> Json<serde_json::Value> {
-    Json(serde_json::json! ({
-        "code": 0,
-        "message": req.pk1,
-    }))
+async fn spend_funds(req: Json<SpendFundsRequest>) -> Json<SpendFundsResponse> {
+
+    // initialize the provider and the wallet with given private key
+    let provider = Provider::connect(NODE_URL).await.unwrap();
+    let secret = unsafe { SecretKey::from_bytes_unchecked([0; 32]) };
+    let unlocked = WalletUnlocked::new_from_private_key(secret, Some(provider));
+
+    // convert address strings to Bech32 addresses (which can't be deserialized directly)
+    let wallet = Bech32Address::from(req.wallet);
+    let recipient = Bech32Address::from(req.recipient);
+
+    // TODO: retrieve code for this wallet address, probably from a mapping that has wallet address as key
+    let code = Vec::<u8>::new();
+
+    let payloads = Vec::<Payload>::new();
+
+    let result = unlocked.multi_spend_predicate(
+        &wallet,
+        code,
+        req.asset_id,
+        req.amount,
+        &recipient,
+        payloads,
+        TxParameters::default(),
+    );
+
+    let inputs = req.inputs
+        .iter()
+        .map(|input| InputNoSig{utxo_id: input.utxo_id})
+        .collect();
+
+    Json(SpendFundsResponse {
+        wallet: req.wallet,
+        asset_id: req.asset_id,
+        amount: req.amount,
+        recipient: req.recipient,
+        inputs: inputs,
+        utxo_id: UtxoId::new(
+            TxId::new([0; 32]),
+            0,
+        ),
+    })
 }
 
 #[handler]
@@ -72,9 +144,8 @@ fn return_err() -> Result<&'static str, NotFoundError> {
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     let app = Route::new()
-        .at("/", get(index))
         .at("/generate_wallet/", post(generate_wallet))
-        .at("/spend_fund/", post(spend_fund));
+        .at("/spend_funds/", post(spend_funds));
 
     Server::new(TcpListener::bind("127.0.0.1:3000"))
         .run(app)
