@@ -22,16 +22,16 @@ async fn ec_recover_and_match_predicate_test() -> Result<(), Error> {
 
     let provider = Provider::connect("node-beta-1.fuel.network").await.unwrap();
 
-    let mut wallet = WalletUnlocked::new_from_private_key(secret_key1, Some(provider.clone()));
-    let mut wallet2 = WalletUnlocked::new_from_private_key(secret_key2, Some(provider.clone()));
-    let mut wallet3 = WalletUnlocked::new_from_private_key(secret_key3, Some(provider.clone()));
+    let wallet = WalletUnlocked::new_from_private_key(secret_key1, Some(provider.clone()));
+    let wallet2 = WalletUnlocked::new_from_private_key(secret_key2, Some(provider.clone()));
+    let wallet3 = WalletUnlocked::new_from_private_key(secret_key3, Some(provider.clone()));
     let receiver = WalletUnlocked::new_random(Some(provider.clone()));
 
     let predicate = Predicate::load_from(
         "out/debug/contracts.bin",
     )?;
 
-    // dbg!("wallets", wallet.clone(), wallet2.clone(), wallet3.clone());
+    dbg!("wallets", wallet.clone(), wallet2.clone(), wallet3.clone());
 
     let predicate_code = predicate.code();
     let predicate_address = predicate.address();
