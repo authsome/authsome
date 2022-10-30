@@ -31,7 +31,7 @@ async fn ec_recover_and_match_predicate_test() -> Result<(), Error> {
         "out/debug/contracts.bin",
     )?;
 
-    dbg!("wallets", wallet.clone(), wallet2.clone(), wallet3.clone());
+    // dbg!("wallets", wallet.clone(), wallet2.clone(), wallet3.clone());
 
     let predicate_code = predicate.code();
     let predicate_address = predicate.address();
@@ -69,7 +69,7 @@ async fn ec_recover_and_match_predicate_test() -> Result<(), Error> {
         .await?; 
         */
  
-    let predicate_balance = provider
+    let _predicate_balance = provider
         .get_asset_balance(predicate.address(), asset_id)
         .await?;
 
@@ -83,7 +83,7 @@ async fn ec_recover_and_match_predicate_test() -> Result<(), Error> {
 
     let predicate_data = signatures.into_iter().flatten().collect();
     wallet
-        .spend_predicate(
+        .multi_spend_predicate(
             predicate_address,
             predicate_code,
             amount_to_predicate,
@@ -94,12 +94,12 @@ async fn ec_recover_and_match_predicate_test() -> Result<(), Error> {
         )
         .await?;
 
-    let receiver_balance_after = provider
+    let _receiver_balance_after = provider
         .get_asset_balance(receiver.address(), asset_id)
         .await?;
     //assert_eq!(amount_to_predicate, receiver_balance_after);
 
-    let predicate_balance = provider
+    let _predicate_balance = provider
         .get_asset_balance(predicate.address(), asset_id)
         .await?;
     //assert_eq!(predicate_balance, 0);
