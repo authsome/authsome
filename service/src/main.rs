@@ -7,15 +7,14 @@ Assumes
 extern crate lazy_static;
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::process::Command;
-use std::collections::HashMap;
 use std::sync::Mutex;
 
 use sha2::{Digest, Sha256};
-
 
 use poem::error::{BadGateway, InternalServerError};
 use poem::{handler, listener::TcpListener, post, web::Json, Result, Route, Server};
@@ -30,13 +29,13 @@ use fuel_gql_client::fuel_tx::ContractId;
 use fuels_contract::predicate::Predicate;
 use fuels_core::parameters::TxParameters;
 use fuels_core::tx::Receipt;
+use fuels_core::tx::UtxoId;
 use fuels_signers::fuel_crypto::PublicKey;
 use fuels_signers::fuel_crypto::SecretKey;
 use fuels_signers::provider::Provider;
 use fuels_signers::Payload;
 use fuels_signers::WalletUnlocked;
 use fuels_types::bech32::Bech32Address;
-use fuels_core::tx::UtxoId;
 
 const N_PUBLIC_KEYS: usize = 3;
 
@@ -123,7 +122,7 @@ fn main() -> bool {
 ";
 
 lazy_static! {
-    static ref BYTE_CODE_LOOKUP: Mutex<HashMap<String, Vec<u8>>> =  {
+    static ref BYTE_CODE_LOOKUP: Mutex<HashMap<String, Vec<u8>>> = {
         let lookup = HashMap::new();
         Mutex::new(lookup)
     };
@@ -170,10 +169,9 @@ fn generate_wallet(req: Json<GenerateWalletRequest>) -> Result<Json<GenerateWall
     // TODO ensure concurrency safety
 
     let mut handlebars = Handlebars::new();
-    match handlebars.register_template_string("t1", PREDICATE_TEMPLATE) {
-        Err(err) => return Err(InternalServerError(err)),
-        _ => (),
-    };
+    if let Err(err) = handlebars.register_template_string("t1", PREDICATE_TEMPLATE) {
+        return Err(InternalServerError(err));
+    }
 
     let mut data = BTreeMap::new();
     for (i, public_key) in req.public_keys.iter().enumerate() {
@@ -189,22 +187,19 @@ fn generate_wallet(req: Json<GenerateWalletRequest>) -> Result<Json<GenerateWall
      */
 
     let project_dir = format!("{}{}", PREDICATE_DIR_PATH, h);
-    match fs::write(&format!("{}{}", project_dir, "Forc.toml"), FORCTOML) {
-        Err(err) => return Err(InternalServerError(err)),
-        _ => (),
-    };
-
-    match fs::create_dir_all(&format!("{}{}", project_dir, "src/")) {
-        Err(err) => return Err(InternalServerError(err)),
-        _ => (),
+    if let Err(err) = fs::write(&format!("{}{}", project_dir, "Forc.toml"), FORCTOML) {
+        return Err(InternalServerError(err));
     }
 
-    match fs::write(
+    if let Err(err) = fs::create_dir_all(&format!("{}{}", project_dir, "src/")) {
+        return Err(InternalServerError(err));
+    }
+
+    if let Err(err) = fs::write(
         &format!("{}{}", project_dir, "src/main.sw"),
         rendered_template,
     ) {
-        Err(err) => return Err(InternalServerError(err)),
-        _ => (),
+        return Err(InternalServerError(err));
     }
 
     let bytecode_file_path = format!("{}{}/predicate.bin", PREDICATE_OUTPUT_DIR, h);
@@ -220,14 +215,14 @@ fn generate_wallet(req: Json<GenerateWalletRequest>) -> Result<Json<GenerateWall
     match predicate {
         Ok(predicate) => {
             let wallet = predicate.address();
-            let code = predicate.code().clone();
+            let code = predicate.code();
             let mut lookup = BYTE_CODE_LOOKUP.lock().unwrap();
             lookup.insert(wallet.to_string(), code);
             Ok(Json(GenerateWalletResponse {
                 public_keys: req.public_keys,
                 wallet: wallet.into(),
             }))
-        },
+        }
         Err(err) => Err(InternalServerError(err)),
     }
 }
@@ -274,7 +269,6 @@ struct InputNoSig {
 
 #[handler]
 async fn spend_funds(req: Json<SpendFundsRequest>) -> Result<Json<SpendFundsResponse>> {
-    
     // initialize the provider and the wallet with given private key
     let provider = match Provider::connect(NODE_URL).await {
         Ok(provider) => provider,
@@ -301,10 +295,12 @@ async fn spend_funds(req: Json<SpendFundsRequest>) -> Result<Json<SpendFundsResp
         let lookup = BYTE_CODE_LOOKUP.lock().unwrap();
         match lookup.get(&wallet.to_string()) {
             Some(code) => code.clone(),
-            None => return Err(InternalServerError(Error::new(
-                ErrorKind::Unsupported,
-                "could not find byte code",
-            ))),
+            None => {
+                return Err(InternalServerError(Error::new(
+                    ErrorKind::Unsupported,
+                    "could not find byte code",
+                )))
+            }
         }
     };
 
@@ -354,24 +350,20 @@ async fn spend_funds(req: Json<SpendFundsRequest>) -> Result<Json<SpendFundsResp
         asset_id: req.asset_id,
         amount: req.amount,
         recipient: req.recipient,
-        inputs: inputs,
+        inputs,
         tx_id: *tx_id,
     }))
 }
 
 fn init() -> Result<(), std::io::Error> {
-    fs::create_dir_all(FORCBUILD_DIR).unwrap();
-    fs::write(&format!("{}", FORCBUILD_DIR), &FORCTOML)
+    fs::create_dir_all(FORCBUILD_DIR)?;
+    fs::write(FORCBUILD_DIR, &FORCTOML)?;
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
-
-
-    match init() {
-        Err(err) => return Err(err),
-        _ => (),
-    };
+    init()?;
 
     let app = Route::new()
         .at("/generate_wallet/", post(generate_wallet))
