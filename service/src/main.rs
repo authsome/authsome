@@ -1,31 +1,30 @@
-/*
-We implement this backend service, instead of using the TypeScript SDK directly in the frontend, because:
+use std::io::Error;
+use std::io::ErrorKind;
 
-- Wallet generation requires compilation of Sway code to obtain the predicate byte code, which in turn gives us the multi-sig wallet address (as a hash of the byte code). This would be hard to do in the front-end.
-- The TypeScript SDK has no support for predicates, which would make it impossible to spend funds from the multi-sig wallet. There is rudimentary support for predicates in the Rust SDK which we can buid on.
+use poem::error::BadGateway;
+use poem::error::InternalServerError;
+use poem::handler;
+use poem::listener::TcpListener;
+use poem::post;
+use poem::web::Json;
+use poem::Result;
+use poem::Route;
+use poem::Server;
 
-API spec:
-(possible extension is to implement a OpenAPI spec for it)
-TBD
- */
-
-use poem::{
-    error::NotFoundError, handler, listener::TcpListener, post, web::Json, Result, Route,
-    Server,
-};
 use serde::Serialize;
 use serde::Deserialize;
 
 use fuel_gql_client::fuel_tx::Address;
 use fuel_gql_client::fuel_tx::AssetId;
-use fuel_gql_client::fuel_tx::TxId;
-use fuel_gql_client::fuel_tx::UtxoId;
+use fuel_gql_client::fuel_tx::ContractId;
 use fuels_signers::WalletUnlocked;
 use fuels_signers::Payload;
 use fuels_signers::provider::Provider;
 use fuels_signers::fuel_crypto::PublicKey;
 use fuels_signers::fuel_crypto::SecretKey;
 use fuels_core::parameters::TxParameters;
+use fuels_core::tx::Receipt;
+use fuels_core::tx::UtxoId;
 use fuels_types::bech32::Bech32Address;
 
 const NODE_URL: &str = "node-beta-1.fuel.network";
@@ -116,8 +115,10 @@ Receive three public keys to generate one multi-sig wallet address.
 */
 #[handler]
 fn generate_wallet(req: Json<GenerateWalletRequest>) -> Json<GenerateWalletResponse> {
-
-    let template = 
+    Json(GenerateWalletResponse{
+        public_keys: req.public_keys,
+        wallet: Address::new([0;32]),
+    })
 }
 
 #[derive(Deserialize)]
@@ -142,7 +143,7 @@ struct SpendFundsResponse {
     amount: u64,
     recipient: Address,
     inputs: Vec<InputNoSig>,
-    utxo_id: UtxoId,
+    tx_id: ContractId,
 }
 
 #[derive(Serialize)]
@@ -152,10 +153,13 @@ struct InputNoSig {
 
 
 #[handler]
-async fn spend_funds(req: Json<SpendFundsRequest>) -> Json<SpendFundsResponse> {
+async fn spend_funds(req: Json<SpendFundsRequest>) -> Result<Json<SpendFundsResponse>> {
 
     // initialize the provider and the wallet with given private key
-    let provider = Provider::connect(NODE_URL).await.unwrap();
+    let provider = match Provider::connect(NODE_URL).await {
+        Ok(provider) => provider,
+        Err(err) => return Err(BadGateway(err)),
+    };
     let secret = unsafe { SecretKey::from_bytes_unchecked([0; 32]) };
     let unlocked = WalletUnlocked::new_from_private_key(secret, Some(provider));
 
@@ -166,9 +170,16 @@ async fn spend_funds(req: Json<SpendFundsRequest>) -> Json<SpendFundsResponse> {
     // TODO: retrieve code for this wallet address, probably from a mapping that has wallet address as key
     let code = Vec::<u8>::new();
 
-    let payloads = Vec::<Payload>::new();
+    // convert the inputs we want to spend into payloads with concatenated signatures
+    let payloads = req.inputs
+        .iter()
+        .map(|input| Payload{
+            utxo_id: input.utxo_id,
+            data: input.signatures.concat(),
+        })
+        .collect();
 
-    let result = unlocked.multi_spend_predicate(
+    let receipts = match unlocked.multi_spend_predicate(
         &wallet,
         code,
         req.asset_id,
@@ -176,29 +187,33 @@ async fn spend_funds(req: Json<SpendFundsRequest>) -> Json<SpendFundsResponse> {
         &recipient,
         payloads,
         TxParameters::default(),
-    );
+    ).await {
+        Ok(receipts) => receipts,
+        Err(err) => return Err(InternalServerError(err)),
+    };
+
+    if receipts.len() != 1 {
+        return Err(InternalServerError(Error::new(ErrorKind::Unsupported, "invalid receipts number")))
+    }
+
+    let tx_id = match receipts.first().unwrap() {
+        receipt @ Receipt::Transfer {..} => receipt.id().unwrap(),
+        _ => return Err(InternalServerError(Error::new(ErrorKind::Unsupported, "invalid receipt type"))),
+    };
 
     let inputs = req.inputs
         .iter()
         .map(|input| InputNoSig{utxo_id: input.utxo_id})
         .collect();
 
-    Json(SpendFundsResponse {
+    Ok(Json(SpendFundsResponse {
         wallet: req.wallet,
         asset_id: req.asset_id,
         amount: req.amount,
         recipient: req.recipient,
         inputs: inputs,
-        utxo_id: UtxoId::new(
-            TxId::new([0; 32]),
-            0,
-        ),
-    })
-}
-
-#[handler]
-fn return_err() -> Result<&'static str, NotFoundError> {
-    Err(NotFoundError)
+        tx_id: *tx_id,
+    }))
 }
 
 #[tokio::main]
