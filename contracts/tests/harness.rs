@@ -83,7 +83,7 @@ async fn ec_recover_and_match_predicate_test() -> Result<(), Error> {
 
     let predicate_data = signatures.into_iter().flatten().collect();
     wallet
-        .multi_spend_predicate(
+        .spend_predicate(
             predicate_address,
             predicate_code,
             amount_to_predicate,
