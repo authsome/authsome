@@ -23,42 +23,102 @@ use fuel_gql_client::fuel_tx::UtxoId;
 use fuels_signers::WalletUnlocked;
 use fuels_signers::Payload;
 use fuels_signers::provider::Provider;
+use fuels_signers::fuel_crypto::PublicKey;
 use fuels_signers::fuel_crypto::SecretKey;
 use fuels_core::parameters::TxParameters;
 use fuels_types::bech32::Bech32Address;
 
-#[derive(Debug, Deserialize)]
-struct PublicKeys {
-    pk1: String,
-    pk2: String,
-    pk3: String,
+const NODE_URL: &str = "node-beta-1.fuel.network";
+
+const PREDICATE_TEMPLATE: &str = "predicate;
+
+use std::{b512::B512, constants::ZERO_B256, ecr::ec_recover_address, inputs::input_predicate_data, prelude::*};
+
+fn get_predicate_input_index() -> u8 {
+    asm() {
+        gm index i3;
+        index: u8
+    }
 }
 
-const NODE_URL: &str = "node-beta-1.fuel.network";
+fn get_output_index(input_index:u8) -> u64 {
+    asm(input_index) {
+        gtf output_index input_index i259;
+        output_index: u64
+    }
+}
+
+fn get_tx_id_memory_address(input_index:u8) -> u64 {
+    asm(input_index) {
+        gtf output_index input_index i258;
+        output_index: u64
+    }
+}
+
+fn get_tx_id_at_address(address: u64) -> b256 {
+    let mut i = 0;
+    while i < 4 {
+        let output = asm(address) -> u64 {
+            lw output address i0;
+            output
+        }
+    }
+
+}
+
+fn extract_public_key_and_match(signature: B512, expected_public_key: b256) -> u64 {
+    let predicate_input_index = get_predicate_input_index();
+    let output_index = get_output_index(predicate_input_index);
+    let tx_id_memory_address = get_tx_id_memory_address(predicate_input_index);
+    let tx_id_at_address = get_tx_id_at_address(tx_id_memory_address);
+    if let Result::Ok(pub_key_sig) = ec_recover_address(signature, ZERO_B256)
+    {
+        if pub_key_sig.value == expected_public_key {
+            return 1;
+        }
+    }
+    return 0;       
+}
+
+fn main() -> bool {
+    let signatures: [B512; 3] = input_predicate_data(0);
+
+    let public_keys = [
+        {{public_key_1}},
+        {{public_key_2}},
+        {{public_key_2}},
+    ];
+
+    let mut matched_keys = 0;
+
+    matched_keys = extract_public_key_and_match(signatures[0], public_keys[0]);
+    matched_keys = matched_keys + extract_public_key_and_match(signatures[1], public_keys[1]);
+    matched_keys = matched_keys + extract_public_key_and_match(signatures[2], public_keys[2]);
+
+    return matched_keys > 1;
+}
+";
+
+#[derive(Deserialize)]
+struct GenerateWalletRequest {
+    public_keys: [PublicKey; 3],
+}
+
+#[derive(Serialize)]
+struct GenerateWalletResponse {
+    public_keys: [PublicKey; 3],
+    wallet: Address,
+}
 
 /*
 Generation of multi-sig wallet.
 Receive three public keys to generate one multi-sig wallet address.
 */
 #[handler]
-fn generate_wallet() -> String {
-    "gen wallet TODO!".to_string()
+fn generate_wallet(req: Json<GenerateWalletRequest>) -> Json<GenerateWalletResponse> {
+
+    let template = 
 }
-
-/*
-Spending of funds from multi-sig wallet.
-
-1. Specificy wallet address to list wallet assets. To do that, retrieve all UTXOs for the wallet, and add up the amounts of coins for each asset ID.
-2. Specify asset ID, amount of coins and destination address for transfer. Collect sufficient number of UTXOs from the retrieved list to spend given amount for given asset ID (if possible, otherwise error).
-3. For each selected UTXO, concatenate and hash the transaction ID and the output index to obtain the message hash to be signed.
-4. For each message hash, sign the message hash with at least two of the three private keys associated with the given wallet address.
-5. Send the request for the transaction creation to the backend service, which will properly assemble the transaction and submit it to the network.
-6. Store the transaction ID for the generated transaction.
-
-For signature verification:
-- msg_hash = sha256(txid + output_index)
-- signature = sign(private_key, msg_hash)
-*/
 
 #[derive(Deserialize)]
 struct SpendFundsRequest {
