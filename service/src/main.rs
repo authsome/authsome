@@ -166,11 +166,14 @@ hash bytecode (obtain address) -> H
 memory map of server -- random file -- so that in other function, we can retrieve bytecode of file wiht unieque name from hash key
 */
 #[handler]
-fn generate_wallet(req: Json<GenerateWalletRequest>) -> Json<GenerateWalletResponse> {
+fn generate_wallet(req: Json<GenerateWalletRequest>) -> Result<Json<GenerateWalletResponse>> {
     // TODO ensure concurrency safety
 
     let mut handlebars = Handlebars::new();
-    handlebars.register_template_string("t1", PREDICATE_TEMPLATE);
+    match handlebars.register_template_string("t1", PREDICATE_TEMPLATE) {
+        Err(err) => return Err(InternalServerError(err)),
+        _ => (),
+    };
 
     let mut data = BTreeMap::new();
     for (i, public_key) in req.public_keys.iter().enumerate() {
@@ -186,12 +189,23 @@ fn generate_wallet(req: Json<GenerateWalletRequest>) -> Json<GenerateWalletRespo
      */
 
     let project_dir = format!("{}{}", PREDICATE_DIR_PATH, h);
-    fs::write(&format!("{}{}", project_dir, "Forc.toml"), FORCTOML);
-    fs::create_dir_all(&format!("{}{}", project_dir, "src/"));
-    fs::write(
+    match fs::write(&format!("{}{}", project_dir, "Forc.toml"), FORCTOML) {
+        Err(err) => return Err(InternalServerError(err)),
+        _ => (),
+    };
+
+    match fs::create_dir_all(&format!("{}{}", project_dir, "src/")) {
+        Err(err) => return Err(InternalServerError(err)),
+        _ => (),
+    }
+
+    match fs::write(
         &format!("{}{}", project_dir, "src/main.sw"),
         rendered_template,
-    );
+    ) {
+        Err(err) => return Err(InternalServerError(err)),
+        _ => (),
+    }
 
     let bytecode_file_path = format!("{}{}/predicate.bin", PREDICATE_OUTPUT_DIR, h);
     let _output = execute_command(
@@ -209,15 +223,12 @@ fn generate_wallet(req: Json<GenerateWalletRequest>) -> Json<GenerateWalletRespo
             let code = predicate.code().clone();
             let mut lookup = BYTE_CODE_LOOKUP.lock().unwrap();
             lookup.insert(wallet.to_string(), code);
-            Json(GenerateWalletResponse {
+            Ok(Json(GenerateWalletResponse {
                 public_keys: req.public_keys,
                 wallet: wallet.into(),
-            })
-        }
-        Err(e) => {
-            dbg!(e);
-            panic!("Failed to load predicate");
-        }
+            }))
+        },
+        Err(err) => Err(InternalServerError(err)),
     }
 }
 
@@ -263,6 +274,7 @@ struct InputNoSig {
 
 #[handler]
 async fn spend_funds(req: Json<SpendFundsRequest>) -> Result<Json<SpendFundsResponse>> {
+    
     // initialize the provider and the wallet with given private key
     let provider = match Provider::connect(NODE_URL).await {
         Ok(provider) => provider,
@@ -354,7 +366,12 @@ fn init() -> Result<(), std::io::Error> {
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
-    init();
+
+
+    match init() {
+        Err(err) => return Err(err),
+        _ => (),
+    };
 
     let app = Route::new()
         .at("/generate_wallet/", post(generate_wallet))
