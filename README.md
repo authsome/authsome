@@ -2,6 +2,8 @@
 
 ## Overview
 
+See the project presentation's [video](https://www.youtube.com/watch?v=3CwjZpXR1SM) or [slides](https://docs.google.com/presentation/d/1x5ranBh-4fsF-byR62QuNnmruCB7-5fS8FIxYFtV7Ho/edit?usp=sharing).
+
 Authsome implements a multi-signature wallet using the predicate system of the Fuel VM and Sway programming language.
 This multi-signature wallet is then used as the basis for an pluggable auth infrastructure, similar to [Web3Auth](https://web3auth.io/docs/overview/what-is-web3auth).
 
