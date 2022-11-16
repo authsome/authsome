@@ -357,7 +357,7 @@ async fn spend_funds(req: Json<SpendFundsRequest>) -> Result<Json<SpendFundsResp
 
 fn init() -> Result<(), std::io::Error> {
     fs::create_dir_all(FORCBUILD_DIR)?;
-    fs::write(FORCBUILD_DIR, &FORCTOML)?;
+    fs::write(format!("{}{}", FORCBUILD_DIR, "Forc.toml"), &FORCTOML)?;
     Ok(())
 }
 
@@ -369,6 +369,7 @@ async fn main() -> Result<(), std::io::Error> {
         .at("/generate_wallet/", post(generate_wallet))
         .at("/spend_funds/", post(spend_funds));
 
+    println!("Authsome web service listening on http://localhost:3000");
     Server::new(TcpListener::bind("127.0.0.1:3000"))
         .run(app)
         .await
@@ -386,13 +387,45 @@ mod tests {
     //     resp.assert_text("Authsome!").await;
     // }
 
-    // send
-    // #[tokio::test]
-    // async fn test_generate_wallet() {
-    //     let resp = TestClient::new(index).get("/").send().await;
-    //     resp.assert_status_is_ok();
-    //     resp.assert_text("Authsome!").await;
+    use poem::{test::TestClient, web::Json};
+    // use crate::generate_wallet;
+    use rand::{self, Rng};
+
+    // use fuels::prelude::Bech32Address;
+
+    use crate::generate_wallet;
+
+    // fn new_bech32_address() -> Bech32Address {
+    //     let mut s = [1u8; 32];
+    //     rand::thread_rng().fill(&mut s[..]);
+    //     Bech32Address::new("fuel", s)
     // }
+
+    fn new_random_public_key() -> String {
+        let mut s = [1u8; 32];
+        rand::thread_rng().fill(&mut s[..]);
+        hex::encode(s)
+    }
+
+    // send
+    #[tokio::test]
+    async fn test_generate_wallet() {
+        // array of three new_bech32_address()
+        let public_keys = [
+            new_random_public_key(),
+            new_random_public_key(),
+            new_random_public_key(),
+        ];
+        // let body = Json(public_keys);
+        let resp = TestClient::new(generate_wallet)
+            .post("/generate_wallet")
+            .body_json(&public_keys)
+            .send()
+            .await;
+
+        resp.assert_status_is_ok();
+        // resp.assert_text("Authsome!").await;
+    }
 
     // send invalid public keys, endpoint should error
     // #[tokio::test]
